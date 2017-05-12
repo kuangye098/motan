@@ -21,11 +21,11 @@
     <parent>
         <groupId>com.weibo</groupId>
         <artifactId>protocol-extension</artifactId>
-        <version>0.3.1-SNAPSHOT</version>
+        <version>0.3.1</version>
     </parent>
     <artifactId>motan-protocol-yar</artifactId>
     <name>motan-protocol-yar</name>
-    <url>https://github.com/weibocom/motan</url>
+    <url>https://github.com/kuangye098/motan</url>
     <properties>
         <project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
     </properties>
