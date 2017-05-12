@@ -19,11 +19,6 @@ package com.weibo.api.motan.transport.netty;
 import java.util.concurrent.RejectedExecutionException;
 import java.util.concurrent.ThreadPoolExecutor;
 
-import org.jboss.netty.channel.ChannelHandlerContext;
-import org.jboss.netty.channel.ChannelStateEvent;
-import org.jboss.netty.channel.ExceptionEvent;
-import org.jboss.netty.channel.MessageEvent;
-import org.jboss.netty.channel.SimpleChannelHandler;
 
 import com.weibo.api.motan.common.URLParamType;
 import com.weibo.api.motan.exception.MotanErrorMsgConstant;
@@ -37,14 +32,18 @@ import com.weibo.api.motan.transport.Channel;
 import com.weibo.api.motan.transport.MessageHandler;
 import com.weibo.api.motan.util.LoggerUtil;
 import com.weibo.api.motan.util.NetUtils;
+import io.netty.channel.ChannelHandler;
+import io.netty.channel.ChannelHandlerContext;
+import io.netty.channel.SimpleChannelInboundHandler;
 
 /**
  * 
- * @author maijunsheng
- * @version 创建时间：2013-5-31
+ * @author zifei
+ * @version 创建时间：2017-5-17
  * 
  */
-public class NettyChannelHandler extends SimpleChannelHandler {
+@ChannelHandler.Sharable
+public class NettyChannelHandler extends SimpleChannelInboundHandler<Object> {
 	private ThreadPoolExecutor threadPoolExecutor;
 	private MessageHandler messageHandler;
 	private Channel serverChannel;
@@ -65,30 +64,27 @@ public class NettyChannelHandler extends SimpleChannelHandler {
 		this.threadPoolExecutor = threadPoolExecutor;
 	}
 
-	@Override
-	public void channelConnected(ChannelHandlerContext ctx, ChannelStateEvent e) throws Exception {
-		LoggerUtil.info("NettyChannelHandler channelConnected: remote=" + ctx.getChannel().getRemoteAddress()
-				+ " local=" + ctx.getChannel().getLocalAddress() + " event=" + e.getClass().getSimpleName());
+	public void channelConnected(ChannelHandlerContext ctx) throws Exception {
+		LoggerUtil.info("NettyChannelHandler channelConnected: remote=" + ctx.channel().remoteAddress()
+				+ " local=" + ctx.channel().localAddress() + " cause=" + ctx.voidPromise().cause());
+	}
+
+	public void channelDisconnected(ChannelHandlerContext ctx) throws Exception {
+		LoggerUtil.info("NettyChannelHandler channelDisconnected: remote=" + ctx.channel().remoteAddress()
+				+ " local=" + ctx.channel().localAddress() + " cause=" + ctx.voidPromise().cause());
 	}
 
 	@Override
-	public void channelDisconnected(ChannelHandlerContext ctx, ChannelStateEvent e) throws Exception {
-		LoggerUtil.info("NettyChannelHandler channelDisconnected: remote=" + ctx.getChannel().getRemoteAddress()
-				+ " local=" + ctx.getChannel().getLocalAddress() + " event=" + e.getClass().getSimpleName());
-	}
+	public void channelRead0(ChannelHandlerContext ctx, Object msg) throws Exception {
 
-	@Override
-	public void messageReceived(ChannelHandlerContext ctx, MessageEvent e) throws Exception {
-		Object message = e.getMessage();
-
-		if (message instanceof Request) {
-			processRequest(ctx, e);
-		} else if (message instanceof Response) {
-			processResponse(ctx, e);
+		if (msg instanceof Request) {
+			processRequest(ctx, (Request)msg);
+		} else if (msg instanceof Response) {
+			processResponse(ctx, (Response)msg);
 		} else {
-			LoggerUtil.error("NettyChannelHandler messageReceived type not support: class=" + message.getClass());
+			LoggerUtil.error("NettyChannelHandler messageReceived type not support: class=" + msg.getClass());
 			throw new MotanFrameworkException("NettyChannelHandler messageReceived type not support: class="
-					+ message.getClass());
+					+ msg.getClass());
 		}
 	}
 
@@ -98,11 +94,11 @@ public class NettyChannelHandler extends SimpleChannelHandler {
 	 * </pre>
 	 * 
 	 * @param ctx
-	 * @param e
+	 * @param request
 	 */
-	private void processRequest(final ChannelHandlerContext ctx, MessageEvent e) {
-		final Request request = (Request) e.getMessage();
-		request.setAttachment(URLParamType.host.getName(), NetUtils.getHostName(ctx.getChannel().getRemoteAddress()));
+	private void processRequest(final ChannelHandlerContext ctx,final Request request) {
+
+		request.setAttachment(URLParamType.host.getName(), NetUtils.getHostName(ctx.channel().remoteAddress()));
 
 		final long processStartTime = System.currentTimeMillis();
 
@@ -125,7 +121,7 @@ public class NettyChannelHandler extends SimpleChannelHandler {
 			response.setException(new MotanServiceException("process thread pool is full, reject",
 					MotanErrorMsgConstant.SERVICE_REJECT));
 			response.setProcessTime(System.currentTimeMillis() - processStartTime);
-			e.getChannel().write(response);
+			ctx.channel().writeAndFlush(response);
 
 			LoggerUtil
 					.debug("process thread pool is full, reject, active={} poolSize={} corePoolSize={} maxPoolSize={} taskCount={} requestId={}",
@@ -149,20 +145,19 @@ public class NettyChannelHandler extends SimpleChannelHandler {
 		response.setRequestId(request.getRequestId());
 		response.setProcessTime(System.currentTimeMillis() - processStartTime);
 
-		if (ctx.getChannel().isConnected()) {
-			ctx.getChannel().write(response);
+		if (ctx.channel().isActive()) {
+			ctx.channel().writeAndFlush(response);
 		}
 	}
 
-	private void processResponse(ChannelHandlerContext ctx, MessageEvent e) {
-		messageHandler.handle(serverChannel, e.getMessage());
+	private void processResponse(ChannelHandlerContext ctx, Response response) {
+		messageHandler.handle(serverChannel,response);
 	}
 
-	@Override
-	public void exceptionCaught(ChannelHandlerContext ctx, ExceptionEvent e) throws Exception {
-		LoggerUtil.error("NettyChannelHandler exceptionCaught: remote=" + ctx.getChannel().getRemoteAddress()
-				+ " local=" + ctx.getChannel().getLocalAddress() + " event=" + e.getCause(), e.getCause());
+	public void exceptionCaught(ChannelHandlerContext ctx) throws Exception {
+		LoggerUtil.error("NettyChannelHandler exceptionCaught: remote=" + ctx.channel().remoteAddress()
+				+ " local=" + ctx.channel().localAddress());
 
-		ctx.getChannel().close();
+		ctx.channel().close();
 	}
 }

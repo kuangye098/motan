@@ -16,15 +16,9 @@
 
 package com.weibo.api.motan.transport.netty;
 
-import java.util.concurrent.Executors;
-import java.util.concurrent.RejectedExecutionException;
-import java.util.concurrent.RejectedExecutionHandler;
-import java.util.concurrent.ThreadFactory;
-import java.util.concurrent.ThreadPoolExecutor;
-import java.util.concurrent.TimeUnit;
+import java.util.concurrent.*;
 import java.util.concurrent.atomic.AtomicInteger;
 
-import org.jboss.netty.util.internal.LinkedTransferQueue;
 
 /**
  * <pre>
@@ -139,6 +133,7 @@ public class StandardThreadExecutor extends ThreadPoolExecutor {
  * </pre>
  * 
  * @author maijunsheng
+ * @since  1.7
  *
  */
 class ExecutorQueue extends LinkedTransferQueue<Runnable> {

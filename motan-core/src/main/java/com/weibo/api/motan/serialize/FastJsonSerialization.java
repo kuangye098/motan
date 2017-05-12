@@ -45,7 +45,7 @@ public class FastJsonSerialization implements Serialization {
         serializer.config(SerializerFeature.WriteEnumUsingToString, true);
         serializer.config(SerializerFeature.WriteClassName, true);
         serializer.write(data);
-        return out.toBytes(null);
+        return out.toBytes((String)null);
     }
 
     @Override

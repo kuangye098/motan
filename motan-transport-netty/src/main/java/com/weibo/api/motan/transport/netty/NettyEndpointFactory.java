@@ -26,8 +26,8 @@ import com.weibo.api.motan.transport.netty.NettyServer;
 import com.weibo.api.motan.transport.support.AbstractEndpointFactory;
 
 /**
- * @author maijunsheng
- * @version 创建时间：2013-6-5
+ * @author zifei
+ * @version 创建时间：2017-5-17
  * 
  */
 @SpiMeta(name = "motan")

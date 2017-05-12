@@ -18,13 +18,8 @@ package com.weibo.api.motan.transport.netty;
 
 import java.net.InetSocketAddress;
 import java.util.concurrent.Executors;
-
-import org.jboss.netty.bootstrap.ServerBootstrap;
-import org.jboss.netty.channel.ChannelFactory;
-import org.jboss.netty.channel.ChannelPipeline;
-import org.jboss.netty.channel.ChannelPipelineFactory;
-import org.jboss.netty.channel.Channels;
-import org.jboss.netty.channel.socket.nio.NioServerSocketChannelFactory;
+import java.util.concurrent.ThreadFactory;
+import java.util.concurrent.atomic.AtomicInteger;
 
 import com.weibo.api.motan.common.ChannelState;
 import com.weibo.api.motan.common.MotanConstants;
@@ -40,6 +35,11 @@ import com.weibo.api.motan.transport.TransportException;
 import com.weibo.api.motan.util.LoggerUtil;
 import com.weibo.api.motan.util.StatisticCallback;
 import com.weibo.api.motan.util.StatsUtil;
+import io.netty.bootstrap.ServerBootstrap;
+import io.netty.channel.*;
+import io.netty.channel.nio.NioEventLoopGroup;
+import io.netty.channel.socket.SocketChannel;
+import io.netty.channel.socket.nio.NioServerSocketChannel;
 
 /**
  * 
@@ -61,15 +61,15 @@ import com.weibo.api.motan.util.StatsUtil;
  */
 public class NettyServer extends AbstractServer implements StatisticCallback {
 	// default io thread is Runtime.getRuntime().availableProcessors() * 2
-	private final static ChannelFactory channelFactory = new NioServerSocketChannelFactory(
-			Executors.newCachedThreadPool(new DefaultThreadFactory("nettyServerBoss", true)),
-			Executors.newCachedThreadPool(new DefaultThreadFactory("nettyServerWorker", true)));
+//	private final static ChannelFactory channelFactory = new NioServerSocketChannelFactory(
+//			Executors.newCachedThreadPool(new DefaultThreadFactory("nettyServerBoss", true)),
+//			Executors.newCachedThreadPool(new DefaultThreadFactory("nettyServerWorker", true)));
 
 	// 单端口需要对应单executor 1) 为了更好的隔离性 2) 为了防止被动releaseExternalResources:
 	private StandardThreadExecutor standardThreadExecutor = null;
 	
 	protected NettyServerChannelManage channelManage = null;
-	private org.jboss.netty.channel.Channel serverChannel;
+	private ServerChannel serverChannel;
 	private ServerBootstrap bootstrap;
 	private MessageHandler messageHandler;
 
@@ -94,7 +94,10 @@ public class NettyServer extends AbstractServer implements StatisticCallback {
 
 		initServerBootstrap();
 
-		serverChannel = bootstrap.bind(new InetSocketAddress(url.getPort()));
+		ChannelFuture channelFuture = bootstrap.bind(url.getPort());
+
+		serverChannel = (ServerChannel)channelFuture.channel();
+
 		state = ChannelState.ALIVE;
 
 		StatsUtil.registryStatisticCallback(this);
@@ -136,24 +139,35 @@ public class NettyServer extends AbstractServer implements StatisticCallback {
 		// 连接数的管理，进行最大连接数的限制 
 		channelManage = new NettyServerChannelManage(maxServerConnection);
 
-		bootstrap = new ServerBootstrap(channelFactory);
-		bootstrap.setOption("child.tcpNoDelay", true);
-		bootstrap.setOption("child.keepAlive", true);
-
 		final NettyChannelHandler handler = new NettyChannelHandler(NettyServer.this, messageHandler,
 				standardThreadExecutor);
 
-		bootstrap.setPipelineFactory(new ChannelPipelineFactory() {
-			// FrameDecoder非线程安全，每个连接一个 Pipeline
-			public ChannelPipeline getPipeline() {
-				ChannelPipeline pipeline = Channels.pipeline();
-				pipeline.addLast("channel_manage", channelManage);
-				pipeline.addLast("decoder", new NettyDecoder(codec, NettyServer.this, maxContentLength));
-				pipeline.addLast("encoder", new NettyEncoder(codec, NettyServer.this));
-				pipeline.addLast("handler", handler);
-				return pipeline;
-			}
+		EventLoopGroup bossGroup = new NioEventLoopGroup(1,new ThreadFactory() {
+				private AtomicInteger threadIndex = new AtomicInteger(0);
+
+				@Override
+				public Thread newThread(Runnable r) {
+					return new Thread(r, String.format("NettyBoss_%d", this.threadIndex.incrementAndGet()));
+				}
 		});
+
+		EventLoopGroup workerGroup = new NioEventLoopGroup();
+
+		bootstrap = new ServerBootstrap();
+		bootstrap.group(bossGroup,workerGroup)
+				 .channel(NioServerSocketChannel.class)
+				 .childOption(ChannelOption.TCP_NODELAY,true)
+				 .childOption(ChannelOption.SO_KEEPALIVE,true)
+				 .childHandler(new ChannelInitializer<SocketChannel>() {
+					 @Override
+					 public void initChannel(SocketChannel ch) throws Exception {
+						 ch.pipeline().addLast(channelManage);
+						 ch.pipeline().addLast(new NettyEncoder(codec, NettyServer.this));
+
+						 ch.pipeline().addLast(new NettyDecoder(codec, NettyServer.this, maxContentLength));
+						 ch.pipeline().addLast(handler);
+					 }
+				 });
 	}
 
 	@Override
@@ -223,7 +237,7 @@ public class NettyServer extends AbstractServer implements StatisticCallback {
 	 */
 	@Override
 	public boolean isBound() {
-		return serverChannel != null && serverChannel.isBound();
+		return serverChannel != null && serverChannel.isOpen();
 	}
 
 	public MessageHandler getMessageHandler() {

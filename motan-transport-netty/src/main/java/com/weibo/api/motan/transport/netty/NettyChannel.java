@@ -19,7 +19,8 @@ package com.weibo.api.motan.transport.netty;
 import java.net.InetSocketAddress;
 import java.util.concurrent.TimeUnit;
 
-import org.jboss.netty.channel.ChannelFuture;
+import io.netty.channel.Channel;
+import io.netty.channel.ChannelFuture;
 
 import com.weibo.api.motan.common.ChannelState;
 import com.weibo.api.motan.common.URLParamType;
@@ -37,8 +38,8 @@ import com.weibo.api.motan.util.LoggerUtil;
 import com.weibo.api.motan.util.MotanFrameworkUtil;
 
 /**
- * @author maijunsheng
- * @version 创建时间：2013-5-31
+ * @author zifei
+ * @version 创建时间：2017-5-17
  * 
  */
 public class NettyChannel implements com.weibo.api.motan.transport.Channel {
@@ -46,7 +47,7 @@ public class NettyChannel implements com.weibo.api.motan.transport.Channel {
 
 	private NettyClient nettyClient;
 
-	private org.jboss.netty.channel.Channel channel = null;
+	private Channel channel = null;
 
 	private InetSocketAddress remoteAddress = null;
 	private InetSocketAddress localAddress = null;
@@ -67,7 +68,7 @@ public class NettyChannel implements com.weibo.api.motan.transport.Channel {
 		NettyResponseFuture response = new NettyResponseFuture(request, timeout, this.nettyClient);
 		this.nettyClient.registerCallback(request.getRequestId(), response);
 
-		ChannelFuture writeFuture = this.channel.write(request);
+		ChannelFuture writeFuture = this.channel.writeAndFlush(request);
 
 		boolean result = writeFuture.awaitUninterruptibly(timeout, TimeUnit.MILLISECONDS);
 
@@ -87,7 +88,7 @@ public class NettyChannel implements com.weibo.api.motan.transport.Channel {
 			return response;
 		}
 
-		writeFuture.cancel();
+		writeFuture.cancel(false);
 		response = this.nettyClient.removeCallback(request.getRequestId());
 
 		if (response != null) {
@@ -97,10 +98,10 @@ public class NettyChannel implements com.weibo.api.motan.transport.Channel {
 		// 失败的调用 
 		nettyClient.incrErrorCount();
 
-		if (writeFuture.getCause() != null) {
+		if (writeFuture.cause() != null) {
 			throw new MotanServiceException("NettyChannel send request to server Error: url="
 					+ nettyClient.getUrl().getUri() + " local=" + localAddress + " "
-					+ MotanFrameworkUtil.toString(request), writeFuture.getCause());
+					+ MotanFrameworkUtil.toString(request), writeFuture.cause());
 		} else {
 			throw new MotanServiceException("NettyChannel send request to server Timeout: url="
 					+ nettyClient.getUrl().getUri() + " local=" + localAddress + " "
@@ -132,25 +133,25 @@ public class NettyChannel implements com.weibo.api.motan.transport.Channel {
             boolean success = channleFuture.isSuccess();
 
 			if (result && success) {
-				channel = channleFuture.getChannel();
-				if (channel.getLocalAddress() != null && channel.getLocalAddress() instanceof InetSocketAddress) {
-					localAddress = (InetSocketAddress) channel.getLocalAddress();
+				channel = channleFuture.channel();
+				if (channel.localAddress() != null && channel.localAddress() instanceof InetSocketAddress) {
+					localAddress = (InetSocketAddress) channel.localAddress();
 				}
 
 				state = ChannelState.ALIVE;
 				return true;
 			}
             boolean connected = false;
-            if(channleFuture.getChannel() != null){
-                connected = channleFuture.getChannel().isConnected();
+            if(channleFuture.channel() != null){
+                connected = channleFuture.channel().isActive();
             }
 
-			if (channleFuture.getCause() != null) {
-				channleFuture.cancel();
+			if (channleFuture.cause() != null) {
+				channleFuture.cancel(false);
 				throw new MotanServiceException("NettyChannel failed to connect to server, url: "
-						+ nettyClient.getUrl().getUri()+ ", result: " + result + ", success: " + success + ", connected: " + connected, channleFuture.getCause());
+						+ nettyClient.getUrl().getUri()+ ", result: " + result + ", success: " + success + ", connected: " + connected, channleFuture.cause());
 			} else {
-				channleFuture.cancel();
+				channleFuture.cancel(false);
                 throw new MotanServiceException("NettyChannel connect to server timeout url: "
                         + nettyClient.getUrl().getUri() + ", cost: " + (System.currentTimeMillis() - start) + ", result: " + result + ", success: " + success + ", connected: " + connected);
             }

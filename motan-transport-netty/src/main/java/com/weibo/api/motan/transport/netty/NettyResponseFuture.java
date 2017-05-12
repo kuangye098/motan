@@ -52,9 +52,9 @@ import com.weibo.api.motan.util.MotanFrameworkUtil;
  * 				return exception
  * 
  * </pre>
- * 
- * @author maijunsheng
- * @version 创建时间：2013-5-31
+ *
+ * @author zifei
+ * @version 创建时间：2017-5-17
  * 
  */
 public class NettyResponseFuture implements ResponseFuture {

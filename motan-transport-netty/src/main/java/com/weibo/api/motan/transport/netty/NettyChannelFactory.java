@@ -22,8 +22,8 @@ import com.weibo.api.motan.rpc.URL;
 import com.weibo.api.motan.util.LoggerUtil;
 
 /**
- * @author maijunsheng
- * @version 创建时间：2013-5-31
+ * @author zifei
+ * @version 创建时间：2017-5-17
  * 
  */
 public class NettyChannelFactory extends BasePoolableObjectFactory {

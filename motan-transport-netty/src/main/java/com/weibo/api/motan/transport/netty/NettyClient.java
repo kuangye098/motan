@@ -25,13 +25,17 @@ import java.util.concurrent.ScheduledFuture;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicLong;
 
+import io.netty.bootstrap.Bootstrap;
+import io.netty.bootstrap.ChannelFactory;
+import io.netty.channel.ChannelInitializer;
+import io.netty.channel.ChannelOption;
+import io.netty.channel.ChannelPipeline;
+import io.netty.channel.EventLoopGroup;
+import io.netty.channel.nio.NioEventLoopGroup;
+import io.netty.channel.socket.SocketChannel;
+import io.netty.channel.socket.nio.NioSocketChannel;
 import org.apache.commons.pool.BasePoolableObjectFactory;
-import org.jboss.netty.bootstrap.ClientBootstrap;
-import org.jboss.netty.channel.ChannelFactory;
-import org.jboss.netty.channel.ChannelPipeline;
-import org.jboss.netty.channel.ChannelPipelineFactory;
-import org.jboss.netty.channel.Channels;
-import org.jboss.netty.channel.socket.nio.NioClientSocketChannelFactory;
+
 
 import com.weibo.api.motan.common.ChannelState;
 import com.weibo.api.motan.common.MotanConstants;
@@ -66,16 +70,16 @@ import com.weibo.api.motan.util.StatsUtil;
  * 			5） 最大返回数据包设置
  * 			6） RPC 的测试的时候，需要非常关注 OOM的问题
  * </pre>
- * 
- * @author maijunsheng
- * @version 创建时间：2013-5-31
+ *
+ * @author zifei
+ * @version 创建时间：2017-5-17
  * 
  */
 public class NettyClient extends AbstractPoolClient implements StatisticCallback {
     //这里采用默认的CPU数*2
-	private static final ChannelFactory channelFactory = new NioClientSocketChannelFactory(
-			Executors.newCachedThreadPool(new DefaultThreadFactory("nettyClientBoss", true)),
-			Executors.newCachedThreadPool(new DefaultThreadFactory("nettyClientWorker", true)));
+//	private static final ChannelFactory channelFactory = new NioClientSocketChannelFactory(
+//			Executors.newCachedThreadPool(new DefaultThreadFactory("nettyClientBoss", true)),
+//			Executors.newCachedThreadPool(new DefaultThreadFactory("nettyClientWorker", true)));
 
 	// 回收过期任务
 	private static ScheduledExecutorService scheduledExecutor = Executors.newScheduledThreadPool(4);
@@ -92,7 +96,7 @@ public class NettyClient extends AbstractPoolClient implements StatisticCallback
 	// 最大连接数
 	private int maxClientConnection = 0;
 
-	private ClientBootstrap bootstrap;
+	private Bootstrap bootstrap;
 
 	public NettyClient(URL url) {
 		super(url);
@@ -234,10 +238,7 @@ public class NettyClient extends AbstractPoolClient implements StatisticCallback
 	 * 初始化 netty clientBootstrap
 	 */
 	private void initClientBootstrap() {
-		bootstrap = new ClientBootstrap(channelFactory);
-		
-		bootstrap.setOption("keepAlive", true);
-		bootstrap.setOption("tcpNoDelay", true);
+		bootstrap = new Bootstrap();
 
 		// 实际上，极端情况下，connectTimeout会达到500ms，因为netty nio的实现中，是依赖BossThread来控制超时，
 		// 如果为了严格意义的timeout，那么需要应用端进行控制。
@@ -246,41 +247,48 @@ public class NettyClient extends AbstractPoolClient implements StatisticCallback
             throw new MotanFrameworkException("NettyClient init Error: timeout(" + timeout + ") <= 0 is forbid.",
                     MotanErrorMsgConstant.FRAMEWORK_INIT_ERROR);
         }
-		bootstrap.setOption("connectTimeoutMillis", timeout);
 
 		// 最大响应包限制
 		final int maxContentLength = url.getIntParameter(URLParamType.maxContentLength.getName(),
 				URLParamType.maxContentLength.getIntValue());
 
-		bootstrap.setPipelineFactory(new ChannelPipelineFactory() {
-			public ChannelPipeline getPipeline() {
-				ChannelPipeline pipeline = Channels.pipeline();
-				pipeline.addLast("decoder", new NettyDecoder(codec, NettyClient.this, maxContentLength));
-				pipeline.addLast("encoder", new NettyEncoder(codec, NettyClient.this));
-				pipeline.addLast("handler", new NettyChannelHandler(NettyClient.this, new MessageHandler() {
-					@Override
-					public Object handle(Channel channel, Object message) {
-						Response response = (Response) message;
+		EventLoopGroup group = new NioEventLoopGroup();
 
-						NettyResponseFuture responseFuture = NettyClient.this.removeCallback(response.getRequestId());
+		bootstrap.group(group)
+				 .channel(NioSocketChannel.class)
+				 .option(ChannelOption.TCP_NODELAY, true)
+				 .option(ChannelOption.SO_KEEPALIVE, true)
+				 .option(ChannelOption.CONNECT_TIMEOUT_MILLIS, timeout)
+				 .handler(new ChannelInitializer<SocketChannel>() {
 
-						if (responseFuture == null) {
-							LoggerUtil.warn(
-									"NettyClient has response from server, but resonseFuture not exist,  requestId={}",
-									response.getRequestId());
-							return null;
-						}
+					 public void initChannel(SocketChannel ch) throws Exception {
+						 ChannelPipeline pipeline = ch.pipeline();
+						 pipeline.addLast(new NettyDecoder(codec, NettyClient.this, maxContentLength));
+         				 pipeline.addLast(new NettyEncoder(codec, NettyClient.this));
+			  	         pipeline.addLast(new NettyChannelHandler(NettyClient.this, new MessageHandler() {
 
-						if (response.getException() != null) {
-							responseFuture.onFailure(response);
-						} else {
-							responseFuture.onSuccess(response);
-						}
+							@Override
+							public Object handle(Channel channel, Object message) {
+								Response response = (Response) message;
 
-						return null;
-					}
-				}));
-				return pipeline;
+								NettyResponseFuture responseFuture = NettyClient.this.removeCallback(response.getRequestId());
+
+								if (responseFuture == null) {
+									LoggerUtil.warn(
+											"NettyClient has response from server, but resonseFuture not exist,  requestId={}",
+											response.getRequestId());
+									return null;
+								}
+
+								if (response.getException() != null) {
+									responseFuture.onFailure(response);
+								} else {
+									responseFuture.onSuccess(response);
+								}
+
+								return null;
+							 }
+				 }));
 			}
 		});
 	}
@@ -455,7 +463,7 @@ public class NettyClient extends AbstractPoolClient implements StatisticCallback
 		return callbackMap.remove(requestId);
 	}
 
-	public ClientBootstrap getBootstrap() {
+	public Bootstrap getBootstrap() {
 		return bootstrap;
 	}
 

@@ -21,19 +21,17 @@ import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ConcurrentMap;
 
-import org.jboss.netty.channel.Channel;
-import org.jboss.netty.channel.ChannelHandlerContext;
-import org.jboss.netty.channel.ChannelStateEvent;
-import org.jboss.netty.channel.SimpleChannelHandler;
 
 import com.weibo.api.motan.util.LoggerUtil;
+import io.netty.channel.*;
 
 /**
  * @author maijunsheng
  * @version 创建时间：2013-6-7
  * 
  */
-public class NettyServerChannelManage extends SimpleChannelHandler {
+@ChannelHandler.Sharable
+public class NettyServerChannelManage extends ChannelDuplexHandler {
 	private ConcurrentMap<String, Channel> channels = new ConcurrentHashMap<String, Channel>();
 
 	private int maxChannel = 0;
@@ -44,11 +42,11 @@ public class NettyServerChannelManage extends SimpleChannelHandler {
 	}
 
 	@Override
-	public void channelConnected(ChannelHandlerContext ctx, ChannelStateEvent e) throws Exception {
-		Channel channel = ctx.getChannel();
+	public void channelRegistered(ChannelHandlerContext ctx) throws Exception {
+		Channel channel = ctx.channel();
 
-		String channelKey = getChannelKey((InetSocketAddress) channel.getLocalAddress(),
-				(InetSocketAddress) channel.getRemoteAddress());
+		String channelKey = getChannelKey((InetSocketAddress) channel.localAddress(),
+				(InetSocketAddress) channel.remoteAddress());
 
 		if (channels.size() > maxChannel) {
 			// 超过最大连接数限制，直接close连接
@@ -58,19 +56,19 @@ public class NettyServerChannelManage extends SimpleChannelHandler {
 			channel.close();
 		} else {
 			channels.put(channelKey, channel);
-			ctx.sendUpstream(e);
+			super.channelRegistered(ctx);
 		}
 	}
 
 	@Override
-	public void channelDisconnected(ChannelHandlerContext ctx, ChannelStateEvent e) throws Exception {
-		Channel channel = ctx.getChannel();
+	public void channelUnregistered(ChannelHandlerContext ctx) throws Exception {
+		Channel channel = ctx.channel();
 
-		String channelKey = getChannelKey((InetSocketAddress) channel.getLocalAddress(),
-				(InetSocketAddress) channel.getRemoteAddress());
+		String channelKey = getChannelKey((InetSocketAddress) channel.localAddress(),
+				(InetSocketAddress) channel.remoteAddress());
 
 		channels.remove(channelKey);
-		ctx.sendUpstream(e);
+		super.channelUnregistered(ctx);;
 	}
 
 	public Map<String, Channel> getChannels() {

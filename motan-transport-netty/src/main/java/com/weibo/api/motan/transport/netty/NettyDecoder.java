@@ -19,11 +19,8 @@ package com.weibo.api.motan.transport.netty;
 import java.net.InetAddress;
 import java.net.InetSocketAddress;
 import java.net.SocketAddress;
+import java.util.List;
 
-import org.jboss.netty.buffer.ChannelBuffer;
-import org.jboss.netty.channel.Channel;
-import org.jboss.netty.channel.ChannelHandlerContext;
-import org.jboss.netty.handler.codec.frame.FrameDecoder;
 
 import com.weibo.api.motan.codec.Codec;
 import com.weibo.api.motan.common.MotanConstants;
@@ -32,6 +29,10 @@ import com.weibo.api.motan.exception.MotanServiceException;
 import com.weibo.api.motan.rpc.DefaultResponse;
 import com.weibo.api.motan.rpc.Response;
 import com.weibo.api.motan.util.LoggerUtil;
+import io.netty.buffer.ByteBuf;
+import io.netty.channel.Channel;
+import io.netty.channel.ChannelHandlerContext;
+import io.netty.handler.codec.ByteToMessageDecoder;
 
 /**
  * netty client decode
@@ -40,7 +41,7 @@ import com.weibo.api.motan.util.LoggerUtil;
  * @version 创建时间：2013-5-31
  * 
  */
-public class NettyDecoder extends FrameDecoder {
+public class NettyDecoder extends ByteToMessageDecoder {
 
 	private Codec codec;
 	private com.weibo.api.motan.transport.Channel client;
@@ -53,42 +54,43 @@ public class NettyDecoder extends FrameDecoder {
 	}
 
 	@Override
-	protected Object decode(ChannelHandlerContext ctx, Channel channel, ChannelBuffer buffer) throws Exception {
-		if (buffer.readableBytes() <= MotanConstants.NETTY_HEADER) {
-			return null;
+	protected void decode(ChannelHandlerContext ctx, ByteBuf in, List<Object> out) throws Exception {
+
+		if (in.readableBytes() <= MotanConstants.NETTY_HEADER) {
+			return ;
 		}
 
-		buffer.markReaderIndex();
+		in.markReaderIndex();
 
-		short type = buffer.readShort();
+		short type = in.readShort();
 		
 		if (type != MotanConstants.NETTY_MAGIC_TYPE) {
-			buffer.resetReaderIndex();
+			in.resetReaderIndex();
 			throw new MotanFrameworkException("NettyDecoder transport header not support, type: " + type);
 		}
 
-		byte messageType = (byte) buffer.readShort();
-		long requestId = buffer.readLong();
+		byte messageType = (byte) in.readShort();
+		long requestId = in.readLong();
 
-		int dataLength = buffer.readInt();
+		int dataLength = in.readInt();
 
 		// FIXME 如果dataLength过大，可能导致问题
-		if (buffer.readableBytes() < dataLength) {
-			buffer.resetReaderIndex();
-			return null;
+		if (in.readableBytes() < dataLength) {
+			in.resetReaderIndex();
+			return ;
 		}
 
 		if (maxContentLength > 0 && dataLength > maxContentLength) {
 			LoggerUtil.warn(
 					"NettyDecoder transport data content length over of limit, size: {}  > {}. remote={} local={}",
-					dataLength, maxContentLength, ctx.getChannel().getRemoteAddress(), ctx.getChannel()
-							.getLocalAddress());
+					dataLength, maxContentLength, ctx.channel().remoteAddress(), ctx.channel()
+							.localAddress());
 			Exception e = new MotanServiceException("NettyDecoder transport data content length over of limit, size: "
 					+ dataLength + " > " + maxContentLength);
 
 			if (messageType == MotanConstants.FLAG_REQUEST) {
 				Response response = buildExceptionResponse(requestId, e);
-				channel.write(response);
+				ctx.channel().writeAndFlush(response);
 				throw e;
 			} else {
 				throw e;
@@ -98,20 +100,20 @@ public class NettyDecoder extends FrameDecoder {
 		
 		byte[] data = new byte[dataLength];
 
-		buffer.readBytes(data);
+		in.readBytes(data);
 
 		try {
-		    String remoteIp = getRemoteIp(channel);
-			return codec.decode(client, remoteIp, data);
+		    String remoteIp = getRemoteIp(ctx.channel());
+			out.add(codec.decode(client, remoteIp, data));
 		} catch (Exception e) {
+			//如果是请求解码失败，直接应答解码异常，如果是应答解码失败，放回处理队列
 			if (messageType == MotanConstants.FLAG_REQUEST) {
-				Response resonse = buildExceptionResponse(requestId, e);
-				channel.write(resonse);
-				return null;
+				Response response = buildExceptionResponse(requestId, e);
+				ctx.channel().writeAndFlush(response);
+				return ;
 			} else {
-				Response resonse = buildExceptionResponse(requestId, e);
-				
-				return resonse;
+				out.add(buildExceptionResponse(requestId, e));
+				return ;
 			}
 		}
 	}
@@ -126,7 +128,7 @@ public class NettyDecoder extends FrameDecoder {
 	
     private String getRemoteIp(Channel channel) {
         String ip = "";
-        SocketAddress remote = channel.getRemoteAddress();
+        SocketAddress remote = channel.remoteAddress();
         if (remote != null) {
             try {
                 ip = ((InetSocketAddress) remote).getAddress().getHostAddress();
