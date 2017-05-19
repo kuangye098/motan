@@ -18,10 +18,7 @@ package com.weibo.api.motan.cluster.loadbalance;
 
 import static org.junit.Assert.assertTrue;
 
-import java.util.ArrayList;
-import java.util.HashMap;
-import java.util.List;
-import java.util.Map;
+import java.util.*;
 import java.util.concurrent.atomic.AtomicInteger;
 
 import junit.framework.Assert;
@@ -55,12 +52,14 @@ public class ConfigurableWeightLoadBalanceTest {
                 counter.get(group).incrementAndGet();
             }
 
-            for (String key : counter.keySet()) {
+            Set<Map.Entry<String, AtomicInteger>> entrySet = counter.entrySet();
+            for (Map.Entry<String, AtomicInteger> entry : entrySet) {
+                String key = entry.getKey();
+                AtomicInteger value = entry.getValue();
                 float total = size * (j + 1);
-                float ratio = counter.get(key).get() * 10 / total;
+                float ratio = value.get() * 10 / total;
                 int weight = groupWeight[Integer.parseInt(key.substring("group".length()))];
                 Assert.assertTrue(Math.abs(weight - ratio) < 2); // 权重误差不超过阈值。
-
             }
         }
 

@@ -36,7 +36,7 @@ import com.weibo.api.motan.rpc.Request;
 public class RandomLoadBalanceTest extends AbstractLoadBalanceTest {
 
     private RandomLoadBalance<IHello> randomLoadBalance = new RandomLoadBalance<IHello>();
-    private final int falseCount = 5;
+    private final static int falseCount = 5;
 
     @Override
     public void setUp() throws Exception {

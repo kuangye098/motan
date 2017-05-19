@@ -17,6 +17,7 @@
 package com.weibo.api.motan.config;
 
 import java.lang.reflect.Field;
+import java.util.logging.Logger;
 
 import junit.framework.TestCase;
 
@@ -42,8 +43,11 @@ public class ConfigClassTest extends TestCase {
     }
 
     private void checkClassAndSuperClass(Class<?> clazz) {
+        if(clazz == null){
+            return;
+        }
         do {
-            if (clazz != Object.class && clazz != null) {
+            if (clazz != Object.class) {
                 checkConfigProperties(clazz);
             }
         } while ((clazz = clazz.getSuperclass()) != null);

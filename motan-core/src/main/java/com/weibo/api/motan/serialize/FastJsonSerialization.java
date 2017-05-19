@@ -45,11 +45,11 @@ public class FastJsonSerialization implements Serialization {
         serializer.config(SerializerFeature.WriteEnumUsingToString, true);
         serializer.config(SerializerFeature.WriteClassName, true);
         serializer.write(data);
-        return out.toBytes((String)null);
+        return out.toBytes("UTF-8");
     }
 
     @Override
     public <T> T deserialize(byte[] data, Class<T> clz) throws IOException {
-        return JSON.parseObject(new String(data), clz);
+        return JSON.parseObject(new String(data,"UTF-8"), clz);
     }
 }

@@ -222,11 +222,11 @@ public class ServiceMockFilter implements Filter {
         private AtomicLong totalSleepTime = new AtomicLong(0);
 
         public MockInfo(URL url) {
-            mean = Long.valueOf(url.getParameter(URLParamType.mean.getName(), URLParamType.mean.getValue()));
-            p90 = Long.valueOf(url.getParameter(URLParamType.p90.getName(), URLParamType.p90.getValue()));
-            p99 = Long.valueOf(url.getParameter(URLParamType.p99.getName(), URLParamType.p99.getValue()));
-            p999 = Long.valueOf(url.getParameter(URLParamType.p999.getName(), URLParamType.p999.getValue()));
-            errorRate = Double.valueOf(url.getParameter(URLParamType.errorRate.getName(), URLParamType.errorRate.getValue()));
+            mean = Long.parseLong(url.getParameter(URLParamType.mean.getName(), URLParamType.mean.getValue()));
+            p90 = Long.parseLong(url.getParameter(URLParamType.p90.getName(), URLParamType.p90.getValue()));
+            p99 = Long.parseLong(url.getParameter(URLParamType.p99.getName(), URLParamType.p99.getValue()));
+            p999 = Long.parseLong(url.getParameter(URLParamType.p999.getName(), URLParamType.p999.getValue()));
+            errorRate = Double.parseDouble(url.getParameter(URLParamType.errorRate.getName(), URLParamType.errorRate.getValue()));
 
         }
     }

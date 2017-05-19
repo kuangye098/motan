@@ -57,8 +57,8 @@ import com.weibo.api.motan.rpc.ResponseFuture;
 @SupportedSourceVersion(SourceVersion.RELEASE_6)
 @SupportedAnnotationTypes({"com.weibo.api.motan.transport.async.MotanAsync"})
 public class MotanAsyncProcessor extends AbstractProcessor {
-    protected static String ASYNC = MotanConstants.ASYNC_SUFFIX;
-    protected static String GENERATE_PATH_KEY = "motanGeneratePath";
+    protected static final String ASYNC = MotanConstants.ASYNC_SUFFIX;
+    protected static final String GENERATE_PATH_KEY = "motanGeneratePath";
     protected static String TARGET_DIR;
 
     public synchronized void init(ProcessingEnvironment processingEnv) {
