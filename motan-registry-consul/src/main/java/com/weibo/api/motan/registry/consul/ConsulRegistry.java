@@ -209,7 +209,8 @@ public class ConsulRegistry extends CommandFailbackRegistry {
     }
 
     private ConcurrentHashMap<String, List<URL>> lookupServiceUpdate(String group) {
-        Long lastConsulIndexId = lookupGroupServices.get(group) == null ? 0 : lookupGroupServices.get(group);
+        Long lastConsulIndexId = lookupGroupServices.get(group);
+        lastConsulIndexId = lastConsulIndexId == null ?0:lastConsulIndexId;
         ConsulResponse<List<ConsulService>> response = lookupConsulService(group, lastConsulIndexId);
         if (response != null) {
             List<ConsulService> services = response.getValue();

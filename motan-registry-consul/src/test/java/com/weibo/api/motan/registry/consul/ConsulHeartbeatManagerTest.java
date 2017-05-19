@@ -10,8 +10,6 @@ import org.junit.After;
 import org.junit.Before;
 import org.junit.Test;
 
-import com.weibo.api.motan.util.MotanSwitcherUtil;
-
 /**
  * 
  * @Description ConsulHeartbeatManagerTest
@@ -22,14 +20,12 @@ import com.weibo.api.motan.util.MotanSwitcherUtil;
 public class ConsulHeartbeatManagerTest {
     private ConsulHeartbeatManager heartbeatManager;
     private MockConsulClient client;
+    private int heartBeatPeriod = 200;
 
     @Before
     public void setUp() throws Exception {
         client = new MockConsulClient("localhost", 8500);
         heartbeatManager = new ConsulHeartbeatManager(client);
-
-        ConsulConstants.HEARTBEAT_CIRCLE = 200;
-        ConsulConstants.SWITCHER_CHECK_CIRCLE = 20;
     }
 
     @After
@@ -51,19 +47,19 @@ public class ConsulHeartbeatManagerTest {
 
         // 打开心跳
         setHeartbeatSwitcher(true);
-        checkHeartbeat(mockServices, true, serviceNum);
+        checkHeartbeat(mockServices, true, 1);
 
         // 关闭心跳
         setHeartbeatSwitcher(false);
         Thread.sleep(100);
-        checkHeartbeat(mockServices, false, serviceNum);
+        checkHeartbeat(mockServices, false, 1);
 
     }
 
     private void checkHeartbeat(Map<String, Long> services, boolean start, int times) throws InterruptedException {
         // 检查times次心跳
         for (int i = 0; i < times; i++) {
-            Thread.sleep(ConsulConstants.HEARTBEAT_CIRCLE + 500);
+            Thread.sleep(ConsulConstants.SWITCHER_CHECK_CIRCLE * 2);
             for (Entry<String, Long> entry : services.entrySet()) {
                 long heartbeatTimes = client.getCheckPassTimes(entry.getKey());
                 long lastHeartbeatTimes = services.get(entry.getKey());
@@ -79,7 +75,5 @@ public class ConsulHeartbeatManagerTest {
 
     public void setHeartbeatSwitcher(boolean value) {
         heartbeatManager.setHeartbeatOpen(value);
-
     }
-
 }
